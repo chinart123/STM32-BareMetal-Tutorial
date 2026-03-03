@@ -23,6 +23,8 @@ STM32_BareMetal_Test/DebugConfig/
 *.uvoptx
 *.scvd
 JLinkLog.txt
+# Bỏ qua các file backup của thư viện RTE do KeilC sinh ra
+*.base@*
 
 # ==========================================
 # 3. BỎ QUA CẤU HÌNH CỦA EDITOR KHÁC
