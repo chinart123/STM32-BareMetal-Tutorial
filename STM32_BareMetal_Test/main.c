@@ -1,12 +1,10 @@
 #include "stm32f10x.h"
 #include "hal_timer_pwm.h"
-//chưa cấp phát bộ nhớ, bỏ extern đi
-//extern volatile uint32_t timer_ms;  // Biến đếm nhịp TIM2 của chú
-volatile uint32_t timer_ms = 0; // Biến đếm nhịp TIM2 của chú
 
+volatile uint32_t timer_ms = 0; // Biến đếm nhịp TIM2
 uint32_t last_fade_tick = 0;
 int16_t brightness = 0;
-int8_t fade_direction = 1; // 1 là tăng, -1 là giảm
+int8_t fade_direction = 1;      // 1 là tăng, -1 là giảm
 
 // 1. HÀM PHỤC VỤ NGẮT TIM2 (Trái tim của hệ thống)
 void TIM2_IRQHandler(void) {
@@ -29,13 +27,14 @@ void timer_init(void) {
     NVIC_EnableIRQ(TIM2_IRQn);            
     TIM2->CR1 |= TIM_CR1_CEN;             
 }
+
 int main(void) {
-    // BẮT BUỘC 2: Mở khóa ngắt toàn cục cho CPU
-    __enable_irq();      // <-- BẮT BUỘC THÊM DÒNG NÀY: Mở khóa ngắt toàn cục
+    // BẮT BUỘC: Mở khóa ngắt toàn cục cho CPU
+    __enable_irq();      
      
-		// 1. Thêm dòng nguyên mẫu hàm này vào:
-		void timer_init(void);  // Bật ngắt TIM2 (Cung cấp nhịp timer_ms)
-    HAL_TIM3_PWM_Init(); // Bật phần cứng PWM TIM3
+    // GỌI HÀM KHỞI TẠO (Không có chữ void)
+    timer_init();        
+    HAL_TIM3_PWM_Init(); 
 
     while(1) {
         // Cứ mỗi 2ms (Tốc độ Fade), ta cập nhật độ sáng 1 lần
@@ -54,13 +53,8 @@ int main(void) {
             }
 
             // Đẩy lệnh xuống tầng Hardware
-            HAL_TIM3_PWM_SetDuty(3, brightness); // Kênh 3 nhịp thở chậm
-            
-            // Thích thì cho Kênh 4 nhịp thở ngược lại
+            HAL_TIM3_PWM_SetDuty(3, brightness); 
             HAL_TIM3_PWM_SetDuty(4, 999 - brightness); 
         }
-        
-        // Nhờ kiến trúc non-blocking, CPU chú rảnh rang 100% để làm việc khác ở đây
-        // Ví dụ: read_sensor_I2C();
     }
 }
