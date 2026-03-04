@@ -1,105 +1,43 @@
 #include "stm32f10x.h"
-#include "button.h"
-#include "led.h"
+#include "hal_timer_pwm.h"
+//chưa cấp phát bộ nhớ, bỏ extern đi
+//extern volatile uint32_t timer_ms;  // Biến đếm nhịp TIM2 của chú
+volatile uint32_t timer_ms; // Biến đếm nhịp TIM2 của chú
 
-volatile unsigned int global_tick = 0; 
-volatile unsigned char xx = 0x00; 
-
-void SysTick_Handler(void) {
-    global_tick++; 
-}
+uint32_t last_fade_tick = 0;
+int16_t brightness = 0;
+int8_t fade_direction = 1; // 1 là tăng, -1 là giảm
 
 int main(void) {
-    unsigned char last_xx = 0xFF; 
+    //timer_init();        // Bật ngắt TIM2 (Cung cấp nhịp timer_ms)
+		// 1. Thêm dòng nguyên mẫu hàm này vào:
+		void timer_init(void);
+    HAL_TIM3_PWM_Init(); // Bật phần cứng PWM TIM3
 
-    // 1. Khởi tạo xung nhịp và GPIO
-    RCC->APB2ENR |= (RCC_APB2ENR_IOPAEN | RCC_APB2ENR_IOPBEN | RCC_APB2ENR_IOPCEN);
+    while(1) {
+        // Cứ mỗi 2ms (Tốc độ Fade), ta cập nhật độ sáng 1 lần
+        if (timer_ms - last_fade_tick >= 2) {
+            last_fade_tick = timer_ms;
 
-    GPIOA->CRL &= ~(0xFF << 0);            
-    GPIOA->CRL |= (0x88 << 0);             
-    GPIOA->ODR |= (1UL << 0) | (1UL << 1); 
-
-    GPIOB->CRH &= ~(0xF << 16); GPIOB->CRH |= (0x3 << 16); GPIOB->ODR |= (1UL << 12); 
-    GPIOC->CRH &= ~(0xF << 20); GPIOC->CRH |= (0x3 << 20); GPIOC->ODR |= (1UL << 13); 
-
-    // 2. Khởi động SysTick
-    SysTick_Config(SystemCoreClock / 1000); 
-
-    while (1) {
-        // ==================================================
-        // KHỐI 1: INPUT LAYER (Nút bấm)
-        // ==================================================
-        button_state_hardware_scan();
-        button_fsm_process(&btn_PA0, global_tick);
-        button_fsm_process(&btn_PA1, global_tick);
-
-        // ==================================================
-        // KHỐI 2: APPLICATION LAYER (Gán xx)
-        // ==================================================
-        
-        // --- CỦA NÚT PA0 ---
-        if (btn_PA0.event_code == BTN_EVENT_SINGLE_CLICK) {
-            xx = (xx == 0x01) ? 0x02 : 0x01;
-            btn_PA0.event_code = BTN_EVENT_NONE; 
-        }
-        else if (btn_PA0.event_code == BTN_EVENT_HOLD) { // Giữ 5s
-            xx = 0x04;
-            btn_PA0.event_code = BTN_EVENT_NONE; 
-        }
-        else if (btn_PA0.event_code == BTN_EVENT_DOUBLE_CLICK) {
-            xx = 0x00; // Reset
-            btn_PA0.event_code = BTN_EVENT_NONE; 
-        }
-        else if (btn_PA0.event_code != BTN_EVENT_NONE) btn_PA0.event_code = BTN_EVENT_NONE; 
-
-        // --- CỦA NÚT PA1 ---
-        if (btn_PA1.event_code == BTN_EVENT_DOUBLE_CLICK) {
-            xx = 0x03;
-            btn_PA1.event_code = BTN_EVENT_NONE; 
-        }
-        else if (btn_PA1.event_code == BTN_EVENT_HOLD) { // Giữ 2s
-            xx = 0x05;
-            btn_PA1.event_code = BTN_EVENT_NONE; 
-        }
-        else if (btn_PA1.event_code != BTN_EVENT_NONE) btn_PA1.event_code = BTN_EVENT_NONE; 
-
-        // ==================================================
-        // KHỐI 3: MIDDLEWARE LAYER (Ra lệnh LED dựa theo xx)
-        // ==================================================
-        if (xx != last_xx) {
-            last_xx = xx; 
+            // Tính toán Logic Breathing
+            brightness += fade_direction;
             
-            // Xóa sạch trạng thái cũ trước khi cấp lệnh mới để không bị loạn
-            led_set_mode(&led_PB12, LED_MODE_OFF, 0, 0, global_tick);
-            led_set_mode(&led_PC13, LED_MODE_OFF, 0, 0, global_tick);
+            if (brightness >= 999) {
+                brightness = 999;
+                fade_direction = -1; // Đụng nóc thì quay đầu giảm
+            } else if (brightness <= 0) {
+                brightness = 0;
+                fade_direction = 1;  // Chạm đáy thì quay đầu tăng
+            }
 
-            // CẤP LỆNH MỚI:
-            if (xx == 0x01 || xx == 0x02) {
-                // PB12 Sáng dần
-                led_set_mode(&led_PB12, LED_MODE_FADE_IN, 0, 0, global_tick);
-            }
-            else if (xx == 0x04) {
-                // PB12 Tối dần
-                led_set_mode(&led_PB12, LED_MODE_FADE_OUT, 0, 0, global_tick);
-            }
-            else if (xx == 0x03) {
-                // PB12 Sáng 1s (1000), tắt 0.5s (500)
-                led_set_mode(&led_PB12, LED_MODE_ASYNC_BLINK, 1000, 500, global_tick);
-            }
-            else if (xx == 0x05) {
-                // Yêu cầu: PC13 tắt 1s, sáng 0.5s -> Sáng 500, Tắt 1000
-                led_set_mode(&led_PC13, LED_MODE_ASYNC_BLINK, 500, 1000, global_tick);
-								led_set_mode(&led_PB12, LED_MODE_ASYNC_BLINK, 1000, 500, global_tick);
-            }
-            // Nếu xx == 0x00 thì code sẽ không làm gì thêm vì đã gọi tắt cả 2 LED ở trên rồi.
+            // Đẩy lệnh xuống tầng Hardware
+            HAL_TIM3_PWM_SetDuty(3, brightness); // Kênh 3 nhịp thở chậm
+            
+            // Thích thì cho Kênh 4 nhịp thở ngược lại
+            HAL_TIM3_PWM_SetDuty(4, 999 - brightness); 
         }
-
-        // ==================================================
-        // KHỐI 4: OUTPUT LAYER (Phần cứng xuất tín hiệu)
-        // ==================================================
-        led_process(&led_PB12, global_tick);
-        led_process(&led_PC13, global_tick);
         
-        led_hardware_update(global_tick); 
+        // Nhờ kiến trúc non-blocking, CPU chú rảnh rang 100% để làm việc khác ở đây
+        // Ví dụ: read_sensor_I2C();
     }
 }
