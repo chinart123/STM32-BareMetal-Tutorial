@@ -13,6 +13,16 @@ void HAL_TIM3_PWM_Init(void) {
     TIM3->PSC = 71;    // 1 bước đếm = 1 micro-giây (1us)
     TIM3->ARR = 999;   // Tổng chu kỳ = 1000 bước = 1 mili-giây (1kHz)
 
+    // BẮT BUỘC 1: Ép phần cứng nạp cấu hình và xóa cờ rác (Trị bệnh kẹt Simulator) 
+    // Nếu không có 2 dòng này, đôi khi cấu hình sẽ không được áp dụng ngay, dẫn đến việc PWM không hoạt động như mong đợi trên Simulator.
+    // Cách hoạt động: Ghi 1 vào EGR (Event Generation Register) với bit UG (Update Generation) sẽ ép TIM3 nạp lại tất cả cấu hình từ PSC, ARR, CCMR, CCER... vào bộ đếm. Đồng thời, xóa cờ UIF (Update Interrupt Flag) trong SR để đảm bảo không có ngắt cập nhật nào bị kẹt lại.
+    // Lưu ý: Trên phần cứng thật, việc này thường không cần thiết vì khi bạn bật TIM3, nó sẽ tự động nạp cấu hình. Tuy nhiên, trên Simulator, nếu bạn thấy PWM không hoạt động sau khi khởi tạo, hãy thử thêm 2 dòng này để đảm bảo cấu hình được áp dụng ngay.
+    // Nếu bạn đang chạy trên phần cứng thật, bạn có thể bỏ qua 2 dòng này. Nhưng nếu bạn đang sử dụng Simulator và gặp vấn đề với PWM không hoạt động sau khi khởi tạo, hãy thêm 2 dòng này để đảm bảo cấu hình được áp dụng ngay.
+    // Tóm lại: Trên phần cứng thật, bạn có thể bỏ qua 2 dòng này. Nhưng trên Simulator, nếu bạn thấy PWM không hoạt động sau khi khởi tạo, hãy thêm 2 dòng này để đảm bảo cấu hình được áp dụng ngay.
+    TIM3->EGR |= TIM_EGR_UG;              
+    TIM3->SR &= ~TIM_SR_UIF;
+    // Giải thích thêm: Việc này giống như bạn "lắc" lại con đồng hồ sau khi chỉnh giờ, để đảm bảo nó chạy đúng theo thời gian mới. Trên phần cứng thật, con đồng hồ sẽ tự động nhận giờ mới khi bạn bật nó lên, nhưng trên Simulator, có thể cần phải "lắc" lại để nó nhận cấu hình mới.
+
     // 4. Cấu hình PWM Mode 1 cho Kênh 3 và 4 (Thanh ghi CCMR2)
     TIM3->CCMR2 &= ~((0xFF << 0) | (0xFF << 8)); // Reset rác
     TIM3->CCMR2 |= (6 << 4) | (6 << 12);         // OC3M = 110, OC4M = 110 (PWM Mode 1)
