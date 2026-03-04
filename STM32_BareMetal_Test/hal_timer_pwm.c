@@ -10,7 +10,7 @@ void HAL_TIM3_PWM_Init(void) {
     GPIOB->CRL |=  ((0xB << 0) | (0xB << 4)); // 0xB = 1011 (AF-PP)
 
     // 3. Cấu hình "Cây thước" (Clock = 72MHz)
-    TIM3->PSC = 71;    // 1 bước đếm = 1 micro-giây (1us)
+    TIM3->PSC = 107; // Hack: Lừa Simulator 108MHz ép về chuẩn 1kHz (Mạch thật thì dùng 71)
     TIM3->ARR = 999;   // Tổng chu kỳ = 1000 bước = 1 mili-giây (1kHz)
 
     // BẮT BUỘC 1: Ép phần cứng nạp cấu hình và xóa cờ rác (Trị bệnh kẹt Simulator) 
